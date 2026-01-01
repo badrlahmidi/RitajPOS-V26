@@ -1,8 +1,9 @@
 <p align="center">
-    <h1 align="center">POS System Using Laravel</h1>
+    <h1 align="center">RitajPOS V26</h1>
 </p>
 
-The project was created while recording video "[Create POS System Using Laravel](https://www.youtube.com/watch?v=Y_NRk0lOOJc&list=PL2hV0q47BY-G9f5xG9Vq-wGjSyy1BekOv)"
+
+<p align="center">RitajPOS V26 is a modern, feature-rich Point of Sale (POS) system built with Laravel 10. Originally forked from <a href="https://github.com/angkosal/laravel-pos">laravel-pos</a> and customized for retail and restaurant businesses in Morocco.</p>
 
 ## Installation
 
@@ -12,8 +13,7 @@ For system requirements you [Check Laravel Requirement](https://laravel.com/docs
 
 ### Clone the repository from github.
 
-    git clone https://github.com/angkosal/laravel-pos.git [YourDirectoryName]
-
+    git clone https://github.com/badrlahmidi/RitajPOS-V26.git [YourDirectoryName]
 The command installs the project in a directory named `YourDirectoryName`. You can choose a different
 directory name if you want.
 
