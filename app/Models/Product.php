@@ -2,81 +2,130 @@
 
 namespace App\Models;
 
-use App\Traits\ProductScopes;
-use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @property int $id
- * @property string $name
- * @property string|null $description
- * @property string|null $image
- * @property string $barcode
- * @property numeric $price
- * @property string|null $purchase_price
- * @property int $quantity
- * @property bool $status
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property-read string $image_url
- * @method static Builder<static>|Product active()
- * @method static Builder<static>|Product bestSelling()
- * @method static Builder<static>|Product currentMonthBestSelling()
- * @method static \Database\Factories\ProductFactory factory($count = null, $state = [])
- * @method static Builder<static>|Product lowStock()
- * @method static Builder<static>|Product newModelQuery()
- * @method static Builder<static>|Product newQuery()
- * @method static Builder<static>|Product pastMonthsHotProducts()
- * @method static Builder<static>|Product query()
- * @method static Builder<static>|Product search($term)
- * @method static Builder<static>|Product whereBarcode($value)
- * @method static Builder<static>|Product whereCreatedAt($value)
- * @method static Builder<static>|Product whereDescription($value)
- * @method static Builder<static>|Product whereId($value)
- * @method static Builder<static>|Product whereImage($value)
- * @method static Builder<static>|Product whereName($value)
- * @method static Builder<static>|Product wherePrice($value)
- * @method static Builder<static>|Product wherePurchasePrice($value)
- * @method static Builder<static>|Product whereQuantity($value)
- * @method static Builder<static>|Product whereStatus($value)
- * @method static Builder<static>|Product whereUpdatedAt($value)
- * @mixin \Eloquent
- */
 class Product extends Model
 {
-    use HasFactory;
-    use ProductScopes;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'name',
         'description',
-        'image',
-        'barcode',
+        'category_id',
         'price',
-        'quantity',
-        'status'
+        'cost',
+        'stock',
+        'track_stock',
+        'barcode',
+        'image',
+        'is_active',
+        'variants',
+        'supplements',
     ];
 
     protected $casts = [
         'price' => 'decimal:2',
-        'quantity' => 'integer',
-        'status' => 'boolean',
+        'cost' => 'decimal:2',
+        'stock' => 'integer',
+        'track_stock' => 'boolean',
+        'is_active' => 'boolean',
+        'variants' => 'array',
+        'supplements' => 'array',
     ];
 
-    protected $appends = ['image_url'];
-    /**
-     * Get the product image URL.
-     */
-    public function getImageUrlAttribute(): string
+    // Relationships
+
+    public function category(): BelongsTo
     {
-        if ($this->image) {
-            return Storage::disk('public')->url($this->image);
+        return $this->belongsTo(Category::class, 'category_id', 'id');
+    }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class, 'product_id', 'id');
+    }
+
+    // Accessors
+
+    public function getFormattedPriceAttribute(): string
+    {
+        return number_format($this->price, 2) . ' DH';
+    }
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (!$this->image) {
+            return asset('images/placeholder-product.png');
         }
 
-        return asset('images/img-placeholder.jpg');
+        return asset('storage/' . $this->image);
+    }
+
+    public function getProfitMarginAttribute(): float
+    {
+        if ($this->cost <= 0) {
+            return 0;
+        }
+
+        return (($this->price - $this->cost) / $this->cost) * 100;
+    }
+
+    public function isLowStock(): bool
+    {
+        if (!$this->track_stock) {
+            return false;
+        }
+
+        return $this->stock <= 10; // Seuil configurable
+    }
+
+    public function isOutOfStock(): bool
+    {
+        if (!$this->track_stock) {
+            return false;
+        }
+
+        return $this->stock <= 0;
+    }
+
+    // Query Scopes
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
+
+    public function scopeInStock(Builder $query): Builder
+    {
+        return $query->where(function ($q) {
+            $q->where('track_stock', false)
+              ->orWhere('stock', '>', 0);
+        });
+    }
+
+    public function scopeLowStock(Builder $query): Builder
+    {
+        return $query->where('track_stock', true)
+            ->where('stock', '<=', 10)
+            ->where('stock', '>', 0);
+    }
+
+    public function scopeByCategory(Builder $query, int $categoryId): Builder
+    {
+        return $query->where('category_id', $categoryId);
+    }
+
+    public function scopeSearch(Builder $query, string $search): Builder
+    {
+        return $query->where(function ($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%")
+              ->orWhere('barcode', 'like', "%{$search}%")
+              ->orWhere('description', 'like', "%{$search}%");
+        });
     }
 }

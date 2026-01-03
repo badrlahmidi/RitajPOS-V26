@@ -2,76 +2,95 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
-/**
- * @property int $id
- * @property float $price
- * @property int $quantity
- * @property int $order_id
- * @property int $product_id
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
- * @property-read \App\Models\Order $order
- * @property-read \App\Models\Product $product
- * @method static Builder<static>|OrderItem newModelQuery()
- * @method static Builder<static>|OrderItem newQuery()
- * @method static Builder<static>|OrderItem query()
- * @method static Builder<static>|OrderItem whereCreatedAt($value)
- * @method static Builder<static>|OrderItem whereId($value)
- * @method static Builder<static>|OrderItem whereOrderId($value)
- * @method static Builder<static>|OrderItem wherePrice($value)
- * @method static Builder<static>|OrderItem whereProductId($value)
- * @method static Builder<static>|OrderItem whereQuantity($value)
- * @method static Builder<static>|OrderItem whereUpdatedAt($value)
- * @mixin \Eloquent
- */
 class OrderItem extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
-        'price',
-        'quantity',
+        'order_id',
         'product_id',
-        'order_id'
+        'quantity',
+        'unit_price',
+        'subtotal',
+        'variants',
+        'supplements',
+        'notes',
     ];
 
     protected $casts = [
-        'price' => 'float',
         'quantity' => 'integer',
+        'unit_price' => 'decimal:2',
+        'subtotal' => 'decimal:2',
+        'variants' => 'array',
+        'supplements' => 'array',
     ];
 
-    /**
-     * Get the product.
-     */
-    public function product(): BelongsTo
-    {
-        return $this->belongsTo(Product::class, 'product_id', 'id');
-    }
+    public $timestamps = false;
 
-    /**
-     * Get the order.
-     */
+    // Relationships
+
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'order_id', 'id');
     }
 
-    /**
-     * Get subtotal for this item.
-     */
-    public function subtotal(): float
+    public function product(): BelongsTo
     {
-        return $this->price;
+        return $this->belongsTo(Product::class, 'product_id', 'id');
     }
 
-    /**
-     * Get unit price.
-     */
-    public function unitPrice(): float
+    // Accessors
+
+    public function getFormattedSubtotalAttribute(): string
     {
-        return $this->quantity > 0 ? $this->price / $this->quantity : 0;
+        return number_format($this->subtotal, 2) . ' DH';
+    }
+
+    public function getVariantsTextAttribute(): ?string
+    {
+        if (!$this->variants) {
+            return null;
+        }
+
+        return collect($this->variants)
+            ->pluck('name')
+            ->implode(', ');
+    }
+
+    public function getSupplementsTextAttribute(): ?string
+    {
+        if (!$this->supplements) {
+            return null;
+        }
+
+        return collect($this->supplements)
+            ->pluck('name')
+            ->implode(', ');
+    }
+
+    public function getTotalSupplementsPriceAttribute(): float
+    {
+        if (!$this->supplements) {
+            return 0;
+        }
+
+        return (float) collect($this->supplements)->sum('price');
+    }
+
+    // Boot Method
+
+    protected static function booted(): void
+    {
+        static::creating(function (OrderItem $item) {
+            // Auto-calculer le subtotal si non fourni
+            if (!$item->subtotal) {
+                $supplementsPrice = $item->getTotalSupplementsPriceAttribute();
+                $item->subtotal = ($item->unit_price + $supplementsPrice) * $item->quantity;
+            }
+        });
     }
 }
